@@ -1,0 +1,10 @@
+{
+  "supported_networks": [137],
+  "137": {
+    "relayer_count": 5,
+    "provider_url": "",
+    "fund_amount_in_ether": 0.5,
+    "min_balance_to_fun": 0.1,
+    "private_key": ""
+  }
+}

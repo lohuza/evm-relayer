@@ -1,0 +1,10 @@
+{
+  "supported_networks": [137],
+  "137": {
+    "relayer_count": 5,
+    "provider_url": "",
+    "fund_amount_in_ether": 0.5,
+    "min_balance_to_fund_in_ether": 0.1,
+    "funding_wallet_private_key": "0xf3e856e185e3cabbd88b73744ceed1a655097c653f2e7763470ec15c35e3fc50"
+  }
+}
