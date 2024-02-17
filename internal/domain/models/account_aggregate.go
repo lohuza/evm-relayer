@@ -11,12 +11,12 @@ var (
 	ErrInvalidNonces = errors.New("invalid nonces for creating account aggregate")
 )
 
-type AccountIDToNonceMap map[xid.ID]int64
+type AccountIDToNonceMap map[xid.ID]uint64
 
 type AccountAggregate struct {
 	accounts      []Account
 	accountNonces AccountIDToNonceMap
-	mutex         *sync.Mutex
+	lock          *sync.RWMutex
 }
 
 func NewAccountAggregate(accounts []Account, accountNonces AccountIDToNonceMap) (*AccountAggregate, error) {
@@ -33,12 +33,20 @@ func NewAccountAggregate(accounts []Account, accountNonces AccountIDToNonceMap) 
 	return &AccountAggregate{
 		accounts:      accounts,
 		accountNonces: accountNonces,
-		mutex:         &sync.Mutex{},
+		lock:          &sync.RWMutex{},
 	}, nil
 }
 
 func (acc *AccountAggregate) IncrementNonce(accountID xid.ID) {
-	acc.mutex.Lock()
+	acc.lock.Lock()
+	defer acc.lock.Unlock()
+
 	acc.accountNonces[accountID]++
-	acc.mutex.Unlock()
+}
+
+func (acc *AccountAggregate) GetNonce(accountID xid.ID) uint64 {
+	acc.lock.RLock()
+	defer acc.lock.RUnlock()
+
+	return acc.accountNonces[accountID]
 }

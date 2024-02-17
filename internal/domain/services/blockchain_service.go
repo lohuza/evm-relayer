@@ -11,6 +11,7 @@ import (
 	"github.com/lohuza/relayer/internal/adapters/repository/postgres"
 	"github.com/lohuza/relayer/internal/domain/models"
 	"github.com/lohuza/relayer/internal/domain/ports"
+	"github.com/lohuza/relayer/pkg"
 	"github.com/rs/zerolog/log"
 )
 
@@ -28,17 +29,37 @@ func NewBlockchainService() ports.BlockchainService {
 	return &blockchainService{}
 }
 
-func (service *blockchainService) GetNoncesForAccounts(ctx context.Context, accounts []models.Account) (map[int32]int64, error) {
+func (service *blockchainService) GetNoncesForAccounts(ctx context.Context, accounts []models.Account) (models.AccountIDToNonceMap, error) {
+	var accountIDToNonceMap models.AccountIDToNonceMap
+	for _, account := range accounts {
+		nonce, err := pkg.ExecuteWithRetry(func() (uint64, error) {
+			return service.GetNonceForAccount(ctx, account)
+		})
+		if err != nil {
+			return nil, err
+		}
+		accountIDToNonceMap[account.ID] = nonce
+	}
 
+	return accountIDToNonceMap, nil
 }
 
-func (service *blockchainService) GetNonceForAccount(ctx context.Context, account models.Account) (int64, error) {
+func (service *blockchainService) GetNonceForAccount(ctx context.Context, account models.Account) (uint64, error) {
 	provider, exists := service.providers[account.Chain]
 	if !exists {
 		return 0, ErrProviderDoesNotExist
 	}
 
-	provider.PendingNonceAt(ctx)
+	address, err := service.GetAddressFromPrivateKey(account.PrivateKey)
+	if err != nil {
+		return 0, err
+	}
+	nonce, err := provider.PendingNonceAt(ctx, address)
+	if err != nil {
+		log.Error().Err(err).Msgf("failed to get nonce for account id %v", account.ID)
+		return 0, err
+	}
+	return nonce, nil
 }
 
 func (service *blockchainService) GetAddressFromPrivateKey(privateKeyHex string) (common.Address, error) {
