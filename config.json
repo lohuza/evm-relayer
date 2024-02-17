@@ -1,5 +1,6 @@
 {
   "app_mode": "debug",
+  "port": "9000",
   "redis": {
     "connection_string": "",
     "db": 0

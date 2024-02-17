@@ -48,6 +48,7 @@ require (
 	github.com/redis/go-redis v6.15.9+incompatible // indirect
 	github.com/redis/go-redis/v9 v9.4.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
+	github.com/rs/xid v1.5.0 // indirect
 	github.com/rs/zerolog v1.32.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect

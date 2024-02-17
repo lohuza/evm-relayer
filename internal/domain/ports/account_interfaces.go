@@ -8,9 +8,9 @@ import (
 )
 
 type AccountService interface {
-	CreateAccounts(ctx context.Context, chain string, accountCount int32) ([]*models.AccountAggregate, error)
 }
 
 type AccountRepository interface {
 	crud.Crud[models.Account]
+	GetAvailableAccountsForChain(ctx context.Context, chain string, accountAmount int32) ([]models.Account, error)
 }

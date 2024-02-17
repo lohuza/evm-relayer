@@ -2,14 +2,14 @@ package webserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 )
 
@@ -23,30 +23,29 @@ func NewWebServer() *gin.Engine {
 	return router
 }
 
-func StartWebServer(router *gin.Engine) {
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-		<-c
-		cancel()
-	}()
+func StartWebServer(ctx context.Context, wg *sync.WaitGroup, router *gin.Engine) {
+	wg.Add(1)
 
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%v", viper.GetInt("microservice_port")),
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%v", viper.GetInt("port")),
 		Handler: router,
 	}
+	go func() {
+		defer wg.Done()
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal().Err(err).Msg("HTTP server ListenAndServe error")
+		}
+	}()
 
-	g, gCtx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		return server.ListenAndServe()
-	})
-	g.Go(func() error {
-		<-gCtx.Done()
-		return server.Shutdown(context.Background())
-	})
+	go func() {
+		<-ctx.Done()
 
-	if err := g.Wait(); err != nil {
-		fmt.Printf("exit reason: %s \n", err)
-	}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			log.Error().Err(err).Msg("HTTP server Shutdown error")
+		}
+
+		log.Debug().Msg("HTTP server has shut down gracefully.")
+	}()
 }

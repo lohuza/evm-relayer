@@ -9,14 +9,14 @@ import (
 	"github.com/lohuza/relayer/internal/domain/ports"
 	"github.com/lohuza/relayer/pkg"
 	"github.com/rs/zerolog/log"
-	"github.com/samber/lo"
 	"github.com/spf13/viper"
 )
 
 type accountService struct {
-	store             postgres.UnitOfWork
-	accounts          map[string]chan *models.AccountAggregate
-	blockchainService ports.BlockchainService
+	store                 postgres.UnitOfWork
+	accounts              map[string]chan *models.AccountAggregate
+	currentlyUsedAccounts []*models.AccountAggregate
+	blockchainService     ports.BlockchainService
 }
 
 func NewAccountService(blockchainService ports.BlockchainService, store postgres.UnitOfWork) ports.AccountService {
@@ -38,20 +38,51 @@ func NewAccountService(blockchainService ports.BlockchainService, store postgres
 	return service
 }
 
-func (service *accountService) CreateAccounts(ctx context.Context, chain string, accountCount int32) ([]*models.AccountAggregate, error) {
-	accounts := make([]*models.AccountAggregate, 0, accountCount)
+func (service *accountService) initializeAccountsForChain(ctx context.Context, chain string, accountAmount int32) ([]*models.AccountAggregate, error) {
+	accounts, err := service.getAccountsAndMarkAsBeingInUse(ctx, chain, accountAmount)
+
+}
+
+func (service *accountService) getAccountsAndMarkAsBeingInUse(ctx context.Context, chain string, accountAmount int32) ([]models.Account, error) {
+	var accounts []models.Account
+	err := service.store.RunInTx(ctx, func(store postgres.UnitOfWorkStore) error {
+		accs, err := store.Account().GetAvailableAccountsForChain(ctx, chain, accountAmount)
+		if err != nil {
+			log.Error().Err(err).Msgf("failed to get accounts for %v", chain)
+			return pkg.ErrInternal
+		}
+
+		for i := 0; i < len(accs); i++ {
+			accs[i].MarkAsBeingUsed()
+		}
+
+		updateCount, err := store.Account().UpdateMany(ctx, &accs)
+		if err != nil {
+			log.Error().Err(err).Msgf("failed to mark accounts as being in use for %s", chain)
+			return pkg.ErrInternal
+		}
+		if int(updateCount) != len(accs) {
+			log.Error().Err(err).Msgf("failed to mark accounts as being in use for %s", chain)
+			return pkg.ErrInternal
+		}
+		accounts = accs
+		return nil
+	})
+
+	return accounts, err
+}
+
+func (service *accountService) createAccounts(ctx context.Context, chain string, accountCount int32) ([]models.Account, error) {
+	accounts := make([]models.Account, 0, accountCount)
 	for len(accounts) != int(accountCount) {
-		newAccount, err := models.NewAccount()
+		newAccount, err := models.NewAccount(chain, true)
 		if err != nil {
 			log.Warn().Msgf("failed to create a new account for %s", chain)
 		}
-		accounts = append(accounts, models.NewAccountAggregate(*newAccount, 1))
+		accounts = append(accounts, *newAccount)
 	}
 
-	accountsToSave := lo.Map(accounts, func(item *models.AccountAggregate, _ int) models.Account {
-		return item.Account
-	})
-	if err := service.store.Repo().Account().SaveMany(ctx, &accountsToSave); err != nil {
+	if err := service.store.Repo().Account().SaveMany(ctx, &accounts); err != nil {
 		log.Error().Err(err)
 		return nil, pkg.ErrInternal
 	}

@@ -1,10 +1,13 @@
 package scheduler
 
 import (
+	"context"
+	"sync"
 	"time"
 
 	"github.com/go-co-op/gocron/v2"
 	"github.com/lohuza/relayer/internal/scheduler/tasks"
+	"github.com/lohuza/relayer/pkg"
 	"github.com/rs/zerolog/log"
 )
 
@@ -12,15 +15,21 @@ type Scheduler struct {
 	scheduler gocron.Scheduler
 }
 
-func NewScheduler() *Scheduler {
-	scheduler, err := gocron.NewScheduler()
+func NewScheduler(ctx context.Context, wg *sync.WaitGroup) *Scheduler {
+	cronScheduler, err := gocron.NewScheduler()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize cron")
 	}
 
-	return &Scheduler{
-		scheduler: scheduler,
+	scheduler := &Scheduler{
+		scheduler: cronScheduler,
 	}
+
+	pkg.HandleShutdown(ctx, wg, func() {
+		scheduler.scheduler.StopJobs()
+	})
+
+	return scheduler
 }
 
 func (s *Scheduler) Start() {
@@ -35,8 +44,4 @@ func (s *Scheduler) Start() {
 	}
 
 	s.scheduler.Start()
-}
-
-func (s *Scheduler) Stop() {
-	s.scheduler.StopJobs()
 }
