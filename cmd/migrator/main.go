@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
-	"github.com/plena/portfolio/cmd/migrator/migrations"
-	"github.com/plena/portfolio/startup"
+	migr "github.com/lohuza/relayer/cmd/migrator/migrations"
+	"github.com/lohuza/relayer/pkg/startup"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/viper"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
 	"github.com/urfave/cli/v2"
@@ -17,11 +18,11 @@ var (
 	db *bun.DB
 )
 
-func init() {
-	db = startup.InitPg()
-}
-
 func main() {
+	startup.ReadConfig()
+
+	db = startup.InitPg(viper.GetString("pg_connection_string"))
+
 	app := &cli.App{
 		Name: "plena.migrator",
 
@@ -31,7 +32,7 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		log.Fatalf("error trying to run migrate. err: %v", err)
+		log.Fatal().Err(err)
 	}
 }
 

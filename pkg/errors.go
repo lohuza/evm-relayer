@@ -22,7 +22,7 @@ var (
 )
 
 type RelayerError struct {
-	Code    int32
+	Code    int
 	Message string
 }
 

@@ -3,7 +3,7 @@ package pkg
 import "net/http"
 
 type Response struct {
-	Code    int32  `json:"-"`
+	Code    int    `json:"-"`
 	Payload any    `json:"payload"`
 	Error   string `json:"error"`
 }
