@@ -4,12 +4,16 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
+	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/lohuza/relayer/internal/adapters/repository/postgres"
-	"github.com/lohuza/relayer/internal/domain/models"
+	"github.com/lohuza/relayer/internal/domain/models/account"
+	"github.com/lohuza/relayer/internal/domain/models/transaction"
 	"github.com/lohuza/relayer/internal/domain/ports"
 	"github.com/lohuza/relayer/pkg"
 	"github.com/rs/zerolog/log"
@@ -20,17 +24,26 @@ var (
 	ErrCastingPublicKet     = errors.New("error casting public key to ECDSA")
 )
 
+type ChainToRpc map[string]*ethclient.Client
+type ChainToChainID map[string]*big.Int
+
 type blockchainService struct {
-	providers map[string]*ethclient.Client
+	// chain to client
+	providers ChainToRpc
 	store     postgres.UnitOfWork
+	mutex     *sync.RWMutex
 }
 
 func NewBlockchainService() ports.BlockchainService {
-	return &blockchainService{}
+	return &blockchainService{
+		providers: nil,
+		store:     nil,
+		mutex:     &sync.RWMutex{},
+	}
 }
 
-func (service *blockchainService) GetNoncesForAccounts(ctx context.Context, accounts []models.Account) (models.AccountIDToNonceMap, error) {
-	var accountIDToNonceMap models.AccountIDToNonceMap
+func (service *blockchainService) GetNoncesForAccounts(ctx context.Context, accounts []account.Account) (account.AccountIDToNonceMap, error) {
+	var accountIDToNonceMap account.AccountIDToNonceMap
 	for _, account := range accounts {
 		nonce, err := pkg.ExecuteWithRetry(func() (uint64, error) {
 			return service.GetNonceForAccount(ctx, account)
@@ -44,7 +57,7 @@ func (service *blockchainService) GetNoncesForAccounts(ctx context.Context, acco
 	return accountIDToNonceMap, nil
 }
 
-func (service *blockchainService) GetNonceForAccount(ctx context.Context, account models.Account) (uint64, error) {
+func (service *blockchainService) GetNonceForAccount(ctx context.Context, account account.Account) (uint64, error) {
 	provider, exists := service.providers[account.Chain]
 	if !exists {
 		return 0, ErrProviderDoesNotExist
@@ -75,4 +88,30 @@ func (service *blockchainService) GetAddressFromPrivateKey(privateKeyHex string)
 	}
 	address := crypto.PubkeyToAddress(*publicKeyECDSA)
 	return address, nil
+}
+
+func (service *blockchainService) SendTransaction(ctx context.Context, transaction transaction.Transaction) {
+	client := service.getRpcClient(transaction.Chain)
+	//chainID, err := client.ChainID()
+	//types.NewTx()
+	chainID := big.NewInt(123)
+	types.NewEIP155Signer(chainID)
+}
+
+func (service *blockchainService) getRpcClient(chain string) *ethclient.Client {
+	service.mutex.RLock()
+	defer service.mutex.RUnlock()
+
+	return service.providers[chain]
+}
+
+func (service *blockchainService) addRpcClient(chain string, client *ethclient.Client) {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+
+	service.providers[chain] = client
+}
+
+func (s *blockchainService) name() {
+
 }

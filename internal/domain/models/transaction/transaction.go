@@ -1,4 +1,4 @@
-package models
+package transaction
 
 import (
 	"github.com/lohuza/relayer/pkg"

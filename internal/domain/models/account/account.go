@@ -1,4 +1,4 @@
-package models
+package account
 
 import (
 	"fmt"
@@ -7,6 +7,8 @@ import (
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 )
+
+type AccountIDToNonceMap map[xid.ID]uint64
 
 type Account struct {
 	bun.BaseModel `bun:"table:accounts"`
